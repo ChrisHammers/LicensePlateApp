@@ -24,6 +24,15 @@ const holder = vi.hoisted(() => ({
   db: undefined as any,
   deletedAuthUsers: [] as string[],
   sentPushes: [] as Array<Record<string, any>>,
+  sentEmails: [] as Array<Record<string, any>>,
+}));
+
+// The onCreate trigger's provider call: captured, never sent.
+vi.mock("./utils/email", () => ({
+  sendTransactionalEmail: async (params: Record<string, any>) => {
+    holder.sentEmails.push(params);
+    return { providerMessageId: "msg_test" };
+  },
 }));
 
 vi.mock("firebase-admin", async () => {
@@ -70,6 +79,8 @@ import {
   createMemberFlagConsentRequest,
   confirmationFailurePage,
   confirmParentalConsent,
+  consentConfirmedPage,
+  onConsentRequestCreatedSendEmail,
   reconcileConsentRecords,
   sendDueConsentPlusNotices,
   sweepExpiredConsentRequests,
@@ -87,6 +98,7 @@ import {
   buildConsentRequestEmailContent,
   consentEndpointAction,
   decideConsentConfirmation,
+  escapeHtml,
   formatConsentToken,
   hashConsentNonce,
   isPlusNoticeDue,
@@ -94,6 +106,7 @@ import {
   parseConsentToken,
   resolvePlusNoticeDelayMillis,
 } from "./consentRequestsCore";
+import { NOTICE_DECK } from "./testSupport/consentNoticeDeck";
 import {
   confirmGuardianConsent,
   findLiveConsentRequest,
@@ -185,6 +198,7 @@ beforeEach(() => {
   db().writeCount = 0;
   holder.deletedAuthUsers.length = 0;
   holder.sentPushes.length = 0;
+  holder.sentEmails.length = 0;
 
   db().seed("users/captain", { userName: "Captain" });
   db().seed("users/captain/private/contact", { email: "captain@example.com" });
@@ -603,8 +617,14 @@ describe("confirmationFailurePage: truthful copy per commitGuardianConfirmation 
     expect(page).not.toContain("marker");
   });
 
-  it("child_gone, other_family, row_gone, and member_gone each get distinct, non-generic copy", () => {
-    const reasons = ["child_gone", "other_family", "row_gone", "member_gone"] as const;
+  it("child_gone, other_family, row_gone, member_gone, and scope_selection_invalid each get distinct, non-generic copy", () => {
+    const reasons = [
+      "child_gone",
+      "other_family",
+      "row_gone",
+      "member_gone",
+      "scope_selection_invalid",
+    ] as const;
     const pages = reasons.map((reason) => confirmationFailurePage(reason));
 
     for (const page of pages) {
@@ -864,6 +884,7 @@ describe("member_flag: refusal-by-silence removes the member, never the account"
       envLabel: "",
       ttlHours: 72,
       kind: "member_flag",
+      scopeVector: buildScopeVector(["core"]),
     });
     expect(content.subject).toContain("to continue in");
     expect(content.text).toContain("marked the family member");
@@ -986,6 +1007,7 @@ describe("the plus notice completes the email_plus method", () => {
       confirmedAtMillis: 1_000,
       childUserName: "Speedy",
       noticeFamilyName: "Hammers",
+      ...launchEvidence(),
     });
     const sendEmail = vi.fn(async () => ({ providerMessageId: "msg_legacy" }));
 
@@ -1083,6 +1105,7 @@ describe("the plus notice completes the email_plus method", () => {
       familyDisplayName: `<Fam&ly>`,
       childUserName: "Speedy",
       envLabel: "DEV",
+      scopeVector: buildScopeVector(["core"]),
     });
     expect(content.subject).toBe(
       "[DEV] Your consent for Speedy on RoadTrip Royale — and how to withdraw it"
@@ -1396,7 +1419,12 @@ describe("F-21: the email trigger claims only a pending request with a valid vec
 
   it("claims a pending request with a valid vector and strips the raw nonce", async () => {
     seedQueued("ok", {});
-    await expect(claim("ok")).resolves.toEqual({ kind: "send", nonce: "ab".repeat(16) });
+    // The claim hands the trigger the vector it validated; the email restates exactly that.
+    await expect(claim("ok")).resolves.toEqual({
+      kind: "send",
+      nonce: "ab".repeat(16),
+      scopeVector: buildScopeVector(["core"]),
+    });
     const doc = db().store.get(`${CONSENT_REQUESTS_COLLECTION}/ok`)!;
     expect(doc.emailDelivery).toEqual({ state: "sending" });
     expect(doc.pendingLinkNonce).toBe("__delete__");
@@ -1605,5 +1633,251 @@ describe("F-21: both FR-64 commits record the evidence from the transaction's fr
     expect(db().store.get("users/kid/private/guardianship")).toBeUndefined();
     expect(grantedRows()).toHaveLength(0);
     expect(findLiveConsentRequest(db(), { familyId, childUserId: "kid" })).not.toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// F-21 slice 3: the endpoint, the trigger and the restatements they serve
+// ---------------------------------------------------------------------------
+
+describe("F-21 slice 3: the notices restate the selection on every surface", () => {
+  function fakeResponse() {
+    const calls: { statusCode?: number; body?: string } = {};
+    const res = {
+      set: () => res,
+      status(code: number) {
+        calls.statusCode = code;
+        return res;
+      },
+      send(body: string) {
+        calls.body = body;
+        return res;
+      },
+    };
+    return { res, calls };
+  }
+
+  /** Moves a request to a shape-valid id (fake auto-ids carry an underscore) and returns its token. */
+  function cleanToken(fromId: string, toId: string, nonce: string): string {
+    const from = `${CONSENT_REQUESTS_COLLECTION}/${fromId}`;
+    db().store.set(`${CONSENT_REQUESTS_COLLECTION}/${toId}`, db().store.get(from)!);
+    db().store.delete(from);
+    return formatConsentToken(toId, nonce);
+  }
+
+  async function post(token: string) {
+    const { res, calls } = fakeResponse();
+    await confirmParentalConsent({ method: "POST", body: { t: token }, query: {} } as never, res as never);
+    return calls;
+  }
+
+  it("GET serves the restatement before the button and performs NO Firestore read or write", async () => {
+    const { FakeDocumentRef, FakeTransaction, FakeQuery, FakeCollectionRef } = await import(
+      "./testSupport/fakeFirestore"
+    );
+    const spies = [
+      vi.spyOn(db(), "collection"),
+      vi.spyOn(db(), "collectionGroup"),
+      vi.spyOn(db(), "runTransaction"),
+      vi.spyOn(db(), "batch"),
+      vi.spyOn(FakeDocumentRef.prototype, "get"),
+      vi.spyOn(FakeTransaction.prototype, "get"),
+      vi.spyOn(FakeQuery.prototype, "get"),
+      vi.spyOn(FakeCollectionRef.prototype, "get"),
+    ];
+    const before = new Map(db().store);
+    try {
+      const { res, calls } = fakeResponse();
+      await confirmParentalConsent(
+        { method: "GET", query: { t: `abc123.${"ab".repeat(16)}` } } as never,
+        res as never
+      );
+      expect(calls.statusCode).toBe(200);
+      for (const key of [
+        "notice.interstitial.scopes_heading",
+        "notice.interstitial.scope_core",
+        "notice.scopes_unavailable",
+      ] as const) {
+        expect(calls.body).toContain(NOTICE_DECK[key].replace(/'/g, "&#39;"));
+      }
+      for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+      expect(db().store).toEqual(before);
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+    }
+  });
+
+  it("POST success (join) restates the agreement with the join body", async () => {
+    const { familyId } = await childAwaiting();
+    const found = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
+    const token = cleanToken(found.requestId, "reqjoin", found.data.pendingLinkNonce as string);
+
+    const calls = await post(token);
+
+    expect(calls.statusCode).toBe(200);
+    expect(calls.body).toBe(consentConfirmedPage("join_admission"));
+    expect(calls.body).toContain(escapeHtml(NOTICE_DECK["notice.confirmed.title"]));
+    expect(calls.body).toContain(escapeHtml(NOTICE_DECK["notice.confirmed.body.join"]));
+    expect(db().store.get("users/kid")?.activeFamilyId).toBe(familyId);
+  });
+
+  it("POST success (member_flag) restates the agreement with the stays-active body", async () => {
+    db().seed("families/famM", { name: "The Ms", creatorId: "captain", status: "active" });
+    db().seed("families/famM/members/captain", { role: "creator" });
+    db().seed("users/flagged", {
+      userName: "Flagged",
+      isChildAccount: true,
+      activeFamilyId: "famM",
+      ageOutYearMonth: 203801,
+    });
+    db().seed("families/famM/members/flagged", { role: "scout", isChild: true, consentPending: true });
+    db().seed(`${CONSENT_REQUESTS_COLLECTION}/reqflag`, {
+      kind: "member_flag",
+      familyId: "famM",
+      childUserId: "flagged",
+      guardianUid: "captain",
+      guardianRole: "creator",
+      guardianEmail: "captain@example.com",
+      expectedAgeOutYearMonth: 203801,
+      status: "pending",
+      attempts: 0,
+      expiresAtMillis: Date.now() + 60_000,
+      method: "email_plus",
+      assuranceLevel: 1,
+      nonceHash: hashConsentNonce("cc".repeat(16)),
+      ...launchEvidence(),
+    });
+
+    const calls = await post(formatConsentToken("reqflag", "cc".repeat(16)));
+
+    expect(calls.statusCode).toBe(200);
+    expect(calls.body).toBe(consentConfirmedPage("member_flag"));
+    expect(calls.body).toContain(escapeHtml(NOTICE_DECK["notice.confirmed.body.member_flag"]));
+    expect(calls.body).not.toContain(escapeHtml(NOTICE_DECK["notice.confirmed.body.join"]));
+  });
+
+  it("POST: a stored vector that fails the re-check gets the scope_selection_invalid page (409), not the generic retry copy", async () => {
+    const { familyId } = await childAwaiting();
+    const found = findLiveConsentRequest(db(), { familyId, childUserId: "kid" })!;
+    const path = `${CONSENT_REQUESTS_COLLECTION}/${found.requestId}`;
+    const vector = JSON.parse(JSON.stringify(found.data.scopeVector));
+    vector.analytics_internal.state = "granted";
+    db().store.set(path, { ...db().store.get(path)!, scopeVector: vector });
+    const token = cleanToken(found.requestId, "reqbad", found.data.pendingLinkNonce as string);
+
+    const calls = await post(token);
+
+    expect(calls.statusCode).toBe(409);
+    expect(calls.body).toBe(confirmationFailurePage("scope_selection_invalid"));
+    expect(calls.body).toContain(escapeHtml(NOTICE_DECK["notice.failure.scope_selection_invalid.title"]));
+    expect(calls.body).toContain(escapeHtml(NOTICE_DECK["notice.failure.scope_selection_invalid.body"]));
+    expect(calls.body).not.toContain("Please try the link again in a moment.");
+    expect(db().store.get("users/kid")?.activeFamilyId).toBeUndefined();
+  });
+
+  describe("the onCreate trigger emails the restatement of the request's own vector", () => {
+    const savedEnv = { ...process.env };
+    beforeEach(() => {
+      process.env.GCLOUD_PROJECT = "demo-test";
+      process.env.RESEND_API_KEY = "test-key";
+      process.env.WELCOME_EMAIL_FROM = "noreply@example.test";
+    });
+
+    async function runTrigger(id: string): Promise<void> {
+      const ref = db().collection(CONSENT_REQUESTS_COLLECTION).doc(id);
+      const snapshot = { id, ref, data: () => db().store.get(`${CONSENT_REQUESTS_COLLECTION}/${id}`) };
+      try {
+        await (onConsentRequestCreatedSendEmail as unknown as {
+          run: (snap: unknown, ctx: unknown) => Promise<void>;
+        }).run(snapshot, { params: { requestId: id } });
+      } finally {
+        process.env = { ...savedEnv };
+      }
+    }
+
+    it.each([
+      ["join_admission", "notice.request.scope_core.join"],
+      ["member_flag", "notice.request.scope_core.member_flag"],
+    ] as const)("%s: the sent email restates core and the four unavailable scopes", async (kind, coreKey) => {
+      db().seed(`${CONSENT_REQUESTS_COLLECTION}/req1`, {
+        kind,
+        status: "pending",
+        guardianEmail: "captain@example.com",
+        childUserName: "Speedy",
+        noticeFamilyName: "Hammers",
+        emailDelivery: { state: "queued" },
+        pendingLinkNonce: "ab".repeat(16),
+        ...launchEvidence(),
+      });
+
+      await runTrigger("req1");
+
+      expect(holder.sentEmails).toHaveLength(1);
+      const email = holder.sentEmails[0];
+      for (const key of ["notice.request.scopes_heading", coreKey, "notice.scopes_unavailable"] as const) {
+        expect(email.text).toContain(NOTICE_DECK[key]);
+      }
+      // The fake stores a dotted update path as a literal key (real Firestore nests it).
+      expect(db().store.get(`${CONSENT_REQUESTS_COLLECTION}/req1`)!["emailDelivery.state"]).toBe(
+        "sent"
+      );
+    });
+
+    it("a request whose stored vector fails validation sends nothing", async () => {
+      const vector = buildScopeVector(["core"]) as Record<string, any>;
+      vector.ads_child_directed.state = "granted";
+      db().seed(`${CONSENT_REQUESTS_COLLECTION}/req2`, {
+        status: "pending",
+        guardianEmail: "captain@example.com",
+        emailDelivery: { state: "queued" },
+        pendingLinkNonce: "ab".repeat(16),
+        ...launchEvidence(),
+        scopeVector: vector,
+      });
+
+      await runTrigger("req2");
+
+      expect(holder.sentEmails).toHaveLength(0);
+      expect(
+        (db().store.get(`${CONSENT_REQUESTS_COLLECTION}/req2`)!.emailDelivery as Record<string, unknown>).state
+      ).toBe("failed");
+    });
+  });
+
+  it("the plus notice restates the retained vector per kind, and a confirmed request without one is retried, never sent", async () => {
+    const base = {
+      familyId: "famX",
+      childUserId: "kid",
+      guardianUid: "captain",
+      guardianEmail: "captain@example.com",
+      status: "confirmed",
+      confirmedAtMillis: 1_000,
+      childUserName: "Speedy",
+      noticeFamilyName: "Hammers",
+    };
+    db().seed(`${CONSENT_REQUESTS_COLLECTION}/pj`, { ...base, ...launchEvidence() });
+    db().seed(`${CONSENT_REQUESTS_COLLECTION}/pm`, { ...base, kind: "member_flag", ...launchEvidence() });
+    db().seed(`${CONSENT_REQUESTS_COLLECTION}/pnone`, { ...base });
+    const sendEmail = vi.fn(async (_params: Record<string, string>) => ({ providerMessageId: "msg" }));
+
+    const result = await sendDueConsentPlusNotices(db() as never, {
+      nowMillis: 1_000 + CONSENT_PLUS_NOTICE_DELAY_MS,
+      delayMillis: CONSENT_PLUS_NOTICE_DELAY_MS,
+      envLabel: "",
+      sendEmail: sendEmail as never,
+    });
+
+    expect(result).toEqual({ sent: 2, failed: 1, abandoned: 0 });
+    const texts = sendEmail.mock.calls.map((call) => call[0].text);
+    expect(texts.some((t) => t.includes(NOTICE_DECK["notice.plus.scope_core.join"]))).toBe(true);
+    expect(texts.some((t) => t.includes(NOTICE_DECK["notice.plus.scope_core.member_flag"]))).toBe(true);
+    for (const text of texts) {
+      expect(text).toContain(NOTICE_DECK["notice.plus.scopes_heading"]);
+      expect(text).toContain(NOTICE_DECK["notice.plus.scopes_unavailable"]);
+    }
+    const none = db().store.get(`${CONSENT_REQUESTS_COLLECTION}/pnone`)!;
+    expect(none.plusNoticeAttempts).toBe(1);
+    expect(none.plusNoticeSentAtMillis).toBeUndefined();
+    expect(none.guardianEmail).toBe("captain@example.com"); // kept for the retry path
   });
 });

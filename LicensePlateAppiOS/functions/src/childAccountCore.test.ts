@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
+  CONSENT_SCOPES_INVALID_MESSAGE,
+  CONSENT_TEXT_OUTDATED_MESSAGE,
+} from "./consentNoticeStrings";
+import {
   AUDIT_CHILD_REGISTRATION_DECLARED,
   AUDIT_PARENTAL_CONSENT_CORRECTED,
   AUDIT_PARENTAL_CONSENT_GRANTED,
@@ -9,12 +13,10 @@ import {
   CHILD_STATUS_CORRECTION_REASONS,
   CONSENT_NOTICE_TEXT_VERSION,
   CONSENT_POLICY_VERSIONS,
-  CONSENT_SCOPES_INVALID_MESSAGE,
   CONSENT_SCOPES_INVALID_REASON,
   CONSENT_SCOPE_CATALOG,
   CONSENT_SCOPE_IDS,
   CONSENT_SCOPE_PRACTICE_VERSIONS,
-  CONSENT_TEXT_OUTDATED_MESSAGE,
   CONSENT_TEXT_OUTDATED_REASON,
   CONSENT_TEXT_VERSION,
   buildChildRegistrationDeclaredMetadata,
@@ -56,7 +58,8 @@ describe("consent event types", () => {
 describe("F-21 version counters (slice 2, landed 2026-11-17)", () => {
   it("pins the consent text, notice text and privacy policy versions", () => {
     expect(CONSENT_TEXT_VERSION).toBe("2026-11-17.consent-scopes");
-    expect(CONSENT_NOTICE_TEXT_VERSION).toBe("2026-11-17.notice-v1");
+    // Bumped to notice-v2 by slice 3 (the scope restatements); see consentNoticeTextLock.test.ts.
+    expect(CONSENT_NOTICE_TEXT_VERSION).toBe("2026-11-17.notice-v2");
     expect(CONSENT_POLICY_VERSIONS.privacyPolicy).toBe("2026-11-17.consent-scopes");
     // Terms of Service text did not change in this slice.
     expect(CONSENT_POLICY_VERSIONS.termsOfService).toBe("2026-08-09.c54758ed");

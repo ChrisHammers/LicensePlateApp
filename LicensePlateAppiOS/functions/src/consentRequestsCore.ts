@@ -22,6 +22,17 @@
  */
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import {
+  CONSENT_SCOPE_CATALOG,
+  buildScopeVector,
+  type ConsentScopeVector,
+} from "./childAccountCore";
+import {
+  consentNoticeStrings,
+  formatConsentNoticeList,
+  type ConsentNoticeKindVariants,
+  type ConsentNoticeStrings,
+} from "./consentNoticeStrings";
 
 // ---------------------------------------------------------------------------
 // FR-59.2 / FR-108 — consent assurance levels
@@ -277,13 +288,50 @@ export function decideConsentConfirmation(
 // Consent-request email (NP-1 direct notice + confirmation link)
 // ---------------------------------------------------------------------------
 
-function escapeHtml(value: string): string {
+/** HTML-escapes text placed in an email or page body (also used by the endpoint's notice pages). */
+export function escapeHtml(value: string): string {
   return value
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+// ---------------------------------------------------------------------------
+// F-21: the scope restatement (text in consentNoticeStrings.ts)
+// ---------------------------------------------------------------------------
+
+function kindVariant(variants: ConsentNoticeKindVariants, kind: ConsentRequestKind | undefined): string {
+  return kind === CONSENT_REQUEST_KIND.memberFlag ? variants.memberFlag : variants.join;
+}
+
+/**
+ * The restatement lines for one vector: the core line only when core is granted, then
+ * one sentence listing every scope whose state is `unavailable`, in catalog order
+ * (omitted when there is none). Nothing is said about a scope the vector does not grant
+ * or list, so the text can never claim more than the record holds.
+ */
+function scopeRestatementLines(
+  vector: ConsentScopeVector,
+  coreLine: string,
+  unavailable: { prefix: string; suffix: string },
+  strings: ConsentNoticeStrings
+): string[] {
+  const lines: string[] = [];
+  if (vector.core?.state === "granted") lines.push(coreLine);
+  const names = CONSENT_SCOPE_CATALOG.filter(
+    (entry) => vector[entry.id]?.state === "unavailable"
+  ).map((entry) => {
+    if (entry.id === "core") {
+      throw new Error("consent notice: core can never be listed as unavailable");
+    }
+    return strings.scopeListNames[entry.id];
+  });
+  if (names.length > 0) {
+    lines.push(`${unavailable.prefix}${formatConsentNoticeList(names, strings.list)}${unavailable.suffix}`);
+  }
+  return lines;
 }
 
 export interface ConsentRequestEmailInput {
@@ -297,14 +345,16 @@ export interface ConsentRequestEmailInput {
   ttlHours: number;
   /** Which lifecycle the notice describes; the lede and the refusal consequence differ. */
   kind?: ConsentRequestKind;
+  /** F-21: the request's stored vector (validated at claim); the restatement is built from it alone. */
+  scopeVector: ConsentScopeVector;
 }
 
 /**
  * NP-1 direct notice, verbatim obligations (§312.4(c)(1)): what is collected, that the
  * parent's consent is required for collection/use, how to grant it, and that the child's
  * information is deleted if consent is not obtained. English at MVP; the ×3 localization
- * rides the NP-2 notice wave and is tracked there — this builder is the single place the
- * copy lives so that wave touches one function.
+ * rides the NP-2 notice wave and is tracked there. The F-21 scope restatement copy lives in
+ * consentNoticeStrings.ts; the rest of this email's copy lives in this builder.
  */
 export function buildConsentRequestEmailContent(
   input: ConsentRequestEmailInput
@@ -324,10 +374,21 @@ export function buildConsentRequestEmailContent(
     ? `If you do not consent, do nothing: the request expires and this player is removed from the family. Their account is kept, protected and paused, and they can rejoin later with your consent. You can withdraw consent at any time from Family settings in the app, which stops collection and lets you delete their data.`
     : `If you do not consent, do nothing: the request expires and the player's pending account information is deleted. You can withdraw consent at any time from Family settings in the app, which stops collection and lets you delete their data.`;
 
+  const strings = consentNoticeStrings();
+  const restatement = scopeRestatementLines(
+    input.scopeVector,
+    kindVariant(strings.request.scopeCore, input.kind),
+    strings.scopesUnavailable,
+    strings
+  );
+  const notCollected = `We do not collect their real name, photos, contact information, or precise location, and there is no chat or messaging.`;
+
   const noticeText = [
     lede,
     ``,
-    `What we collect if you consent: a nickname chosen in the app, a cartoon avatar selection, gameplay activity (license-plate finds, scores, trip participation), and an internal account identifier. We do not collect their real name, photos, contact information, or precise location, and there is no chat or messaging.`,
+    strings.request.scopesHeading,
+    ...restatement,
+    notCollected,
     `Who can see it: only members of your family group, which you control. Nothing is public, and children cannot be found or contacted by other users.`,
     `How it is used: to run the game and sync your family's shared trips. It is never used for advertising and never sold.`,
     ``,
@@ -345,7 +406,9 @@ export function buildConsentRequestEmailContent(
     `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1c1c1e;">`,
     `<h2 style="color:#1d4ed8;">Confirm your consent</h2>`,
     ledeHtml,
-    `<p><strong>What we collect if you consent:</strong> a nickname chosen in the app, a cartoon avatar selection, gameplay activity (license-plate finds, scores, trip participation), and an internal account identifier. We do not collect their real name, photos, contact information, or precise location, and there is no chat or messaging.</p>`,
+    `<p><strong>${escapeHtml(strings.request.scopesHeading)}</strong></p>`,
+    ...restatement.map((line) => `<p>${escapeHtml(line)}</p>`),
+    `<p>${escapeHtml(notCollected)}</p>`,
     `<p><strong>Who can see it:</strong> only members of your family group, which you control. Nothing is public, and children cannot be found or contacted by other users.</p>`,
     `<p><strong>How it is used:</strong> to run the game and sync your family's shared trips. It is never used for advertising and never sold.</p>`,
     `<p style="text-align:center;margin:32px 0;"><a href="${escapeHtml(input.confirmUrl)}" style="background:#1d4ed8;color:#ffffff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:600;">I consent — activate this account</a></p>`,
@@ -388,17 +451,37 @@ export function consentEndpointAction(method: unknown): ConsentEndpointAction {
  * both belong to the POST), so it must not read the request document or name the
  * child or family. The guardian just read those names in the email that carried the
  * link; this page only asks for the human act the method requires.
+ *
+ * F-21: it is also where the consent act happens, so it restates the terms before the
+ * button — kind-neutral, and derived from CONSENT_SCOPE_CATALOG alone (the vector every
+ * request carries at launch: required scopes granted, frozen ones unavailable), never
+ * from the request. Once a scope becomes optional this needs a carrier that is not a
+ * document read, for example a selection digest in the signed token.
  */
 export function buildConsentInterstitialPage(input: {
   token: string;
   envLabel: string;
 }): string {
   const prefix = input.envLabel ? `[${input.envLabel}] ` : "";
+  const strings = consentNoticeStrings();
+  const catalogVector = buildScopeVector(
+    CONSENT_SCOPE_CATALOG.filter((entry) => entry.availability === "required").map(
+      (entry) => entry.id
+    )
+  );
+  const restatement = scopeRestatementLines(
+    catalogVector,
+    strings.interstitial.scopeCore,
+    strings.scopesUnavailable,
+    strings
+  );
   return [
     `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${prefix}Confirm parental consent</title></head>`,
     `<body style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:48px auto;padding:0 24px;color:#1c1c1e;">`,
     `<h2 style="color:#1d4ed8;">One more step</h2>`,
     `<p>You followed a parental-consent link from a RoadTrip Royale email. To confirm your consent and activate the player's account, press the button below.</p>`,
+    `<p><strong>${escapeHtml(strings.interstitial.scopesHeading)}</strong></p>`,
+    ...restatement.map((line) => `<p>${escapeHtml(line)}</p>`),
     `<form method="post"><input type="hidden" name="t" value="${escapeHtml(input.token)}">`,
     `<button type="submit" style="background:#1d4ed8;color:#ffffff;padding:12px 24px;border-radius:10px;border:none;font-size:16px;font-weight:600;cursor:pointer;">I consent — activate this account</button>`,
     `</form>`,
@@ -416,6 +499,10 @@ export interface ConsentPlusNoticeEmailInput {
   familyDisplayName: string;
   childUserName: string;
   envLabel: string;
+  /** Selects the kind-specific "What you agreed to" line. */
+  kind?: ConsentRequestKind;
+  /** F-21: the vector retained on the confirmed request; the restatement is built from it alone. */
+  scopeVector: ConsentScopeVector;
 }
 
 /**
@@ -432,11 +519,19 @@ export function buildConsentPlusNoticeEmailContent(
   const child = escapeHtml(input.childUserName);
   const subjectPrefix = input.envLabel ? `[${input.envLabel}] ` : "";
   const subject = `${subjectPrefix}Your consent for ${input.childUserName} on RoadTrip Royale — and how to withdraw it`;
+  const strings = consentNoticeStrings();
+  const restatement = scopeRestatementLines(
+    input.scopeVector,
+    kindVariant(strings.plus.scopeCore, input.kind),
+    strings.plus.scopesUnavailable,
+    strings
+  );
 
   const text = [
     `This is a follow-up to the consent you recently confirmed for the player "${input.childUserName}" in the "${input.familyDisplayName}" family on RoadTrip Royale. U.S. law (COPPA) requires this second notice so you have a record of that consent and a way to change your mind.`,
     ``,
-    `What you consented to: the app collects this player's chosen nickname, cartoon avatar selection, gameplay activity (license-plate finds, scores, trip participation), and an internal account identifier — visible only to members of your family group, which you control. Nothing is public, there is no chat or messaging, and their information is never used for advertising and never sold.`,
+    strings.plus.scopesHeading,
+    ...restatement,
     ``,
     `To withdraw consent at any time: open RoadTrip Royale and go to Family settings. Withdrawing stops collection and lets you delete the player's data.`,
     ``,
@@ -447,7 +542,8 @@ export function buildConsentPlusNoticeEmailContent(
     `<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:560px;margin:0 auto;padding:24px;color:#1c1c1e;">`,
     `<h2 style="color:#1d4ed8;">A record of your consent</h2>`,
     `<p>This is a follow-up to the consent you recently confirmed for the player <strong>${child}</strong> in the <strong>${family}</strong> family on RoadTrip Royale. U.S. law (COPPA) requires this second notice so you have a record of that consent and a way to change your mind.</p>`,
-    `<p><strong>What you consented to:</strong> the app collects this player's chosen nickname, cartoon avatar selection, gameplay activity (license-plate finds, scores, trip participation), and an internal account identifier — visible only to members of your family group, which you control. Nothing is public, there is no chat or messaging, and their information is never used for advertising and never sold.</p>`,
+    `<p><strong>${escapeHtml(strings.plus.scopesHeading)}</strong></p>`,
+    ...restatement.map((line) => `<p>${escapeHtml(line)}</p>`),
     `<p><strong>To withdraw consent at any time:</strong> open RoadTrip Royale and go to Family settings. Withdrawing stops collection and lets you delete the player's data.</p>`,
     `<p style="font-size:13px;color:#6b7280;">If you did not confirm this consent, open Family settings and remove the player from your family — that withdraws the consent and stops collection immediately.</p>`,
     `</div>`,

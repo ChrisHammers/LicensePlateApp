@@ -15,6 +15,11 @@
  *    "Revocation" ends consent for someone who is still a child — the flag stays true.
  */
 
+import {
+  CONSENT_SCOPES_INVALID_MESSAGE,
+  CONSENT_TEXT_OUTDATED_MESSAGE,
+} from "./consentNoticeStrings";
+
 // ---------------------------------------------------------------------------
 // Consent-record constants (§11.1) — event types MUST match the retention
 // exemption list in `retentionCore.ts` so these rows survive the audit-log
@@ -80,13 +85,23 @@ export const CONSENT_TEXT_HASH =
 
 /**
  * Version of the server-only consent notice text (F-21 versionBump, counter 2): the
- * request email, the plus notice, the confirmation pages and the two rejection
- * messages below. Stamped on every consent request at creation and copied into the
- * GRANTED row. Never sent by or compared with the client, so a notice-text fix needs
- * no app release. Slice 3 moves that text into one module and adds a hash lock;
- * until then this constant is pinned by value only.
+ * scope restatements in the request email, the confirmation link's pre-button page,
+ * the confirmed page and the plus notice, the scope_selection_invalid failure page and
+ * the two rejection messages — all in `consentNoticeStrings.ts`. Stamped on every
+ * consent request at creation and copied into the GRANTED row. Never sent by or
+ * compared with the client, so a notice-text fix needs no app release.
+ * notice-v1 (slice 2) predates the restatements; notice-v2 (slice 3) adds them.
  */
-export const CONSENT_NOTICE_TEXT_VERSION = "2026-11-17.notice-v1";
+export const CONSENT_NOTICE_TEXT_VERSION = "2026-11-17.notice-v2";
+
+/**
+ * SHA-256 hex digest of `consentNoticeTextHashInput()` (every string in
+ * `consentNoticeStrings.ts`, every language). `consentNoticeTextLock.test.ts` recomputes
+ * it on every run, so changing that text without bumping CONSENT_NOTICE_TEXT_VERSION
+ * fails the suite. Update the hash only together with a version bump.
+ */
+export const CONSENT_NOTICE_TEXT_HASH =
+  "c2e7a3a4c0a72e04e8775ff8c50712993c2640ed3c4acba35e3b72229f1d88e6";
 
 // ---------------------------------------------------------------------------
 // Consent scope catalog (v3 FR-65 / v4 FR-103, F-21 slice 1)
@@ -430,17 +445,8 @@ function reject(
 export const CONSENT_TEXT_OUTDATED_REASON = "consent_text_outdated";
 /** `details.reason` when the client's scope selection fails `validateConsentScopeSelection`. */
 export const CONSENT_SCOPES_INVALID_REASON = "consent_scopes_invalid";
-
-/**
- * The HttpsError messages for the two reasons above (approved copy deck,
- * notice.reject.*; the same text on purpose). Builds without the reason mapping show
- * the raw message, so it must read as an instruction to the captain. Server text,
- * under CONSENT_NOTICE_TEXT_VERSION.
- */
-export const CONSENT_TEXT_OUTDATED_MESSAGE =
-  "This version of RoadTrip Royale can't approve a child. Update the app to the latest version and try again.";
-export const CONSENT_SCOPES_INVALID_MESSAGE =
-  "This version of RoadTrip Royale can't approve a child. Update the app to the latest version and try again.";
+// Their HttpsError messages live in `consentNoticeStrings.ts` (notice.reject.*), under
+// CONSENT_NOTICE_TEXT_VERSION.
 
 export type ConsentCaptureCheck =
   | { ok: true; consentScopes: ConsentScopeId[]; consentTextVersion: string }

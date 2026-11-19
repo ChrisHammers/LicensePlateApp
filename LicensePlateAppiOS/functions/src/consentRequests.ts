@@ -43,6 +43,7 @@ import {
   buildConsentPlusNoticeEmailContent,
   buildConsentRequestEmailContent,
   consentEndpointAction,
+  escapeHtml,
   consentRequestKind,
   decideConsentConfirmation,
   formatConsentToken,
@@ -70,6 +71,7 @@ import {
   familyMembershipLeaveUserUpdate,
 } from "./wasEverInFamilyUserUpdates";
 import { writeChildMembershipRevocation } from "./childConsent";
+import { consentNoticeStrings } from "./consentNoticeStrings";
 import { CHILD_DECLARED_AT_FIELD, deleteProvisionalChildAccountIfNeverConsented } from "./provisionalChildAccounts";
 import { PENDING_FAMILY_REQUEST_FIELD, findLivePendingJoinRequestsInOtherFamilies } from "./familyJoinRequestIntegrity";
 import { stageJoinRequestRetirement } from "./pendingJoinRequestExpiry";
@@ -333,7 +335,7 @@ function confirmEndpointBaseUrl(): string {
 }
 
 export type ConsentEmailClaim =
-  | { kind: "send"; nonce: string }
+  | { kind: "send"; nonce: string; scopeVector: ConsentScopeVector }
   | { kind: "skipped" }
   | { kind: "refused" };
 
@@ -344,6 +346,7 @@ export type ConsentEmailClaim =
  * a request superseded before its trigger ran never sends a dead link. F-21: a request
  * with no valid scope vector is never emailed; its delivery is marked failed and the
  * nonce is dropped, so the link the email would have carried never exists anywhere.
+ * A claim to send returns the vector this transaction validated; the email restates it.
  */
 export async function claimConsentRequestEmail(
   db: Firestore,
@@ -359,7 +362,8 @@ export async function claimConsentRequestEmail(
     if (typeof nonce !== "string" || nonce.length === 0) return { kind: "skipped" };
     // The delivery map is replaced whole (it was read in this transaction) rather than
     // patched by dotted path.
-    if (!validateStoredScopeVector(data.scopeVector).ok) {
+    const vector = validateStoredScopeVector(data.scopeVector);
+    if (!vector.ok) {
       tx.update(requestRef, {
         emailDelivery: { ...data.emailDelivery, state: "failed", failedAtMillis: Date.now() },
         pendingLinkNonce: admin.firestore.FieldValue.delete(),
@@ -370,7 +374,7 @@ export async function claimConsentRequestEmail(
       emailDelivery: { ...data.emailDelivery, state: "sending" },
       pendingLinkNonce: admin.firestore.FieldValue.delete(),
     });
-    return { kind: "send", nonce };
+    return { kind: "send", nonce, scopeVector: vector.vector };
   });
 }
 
@@ -407,6 +411,7 @@ export const onConsentRequestCreatedSendEmail = functions
       envLabel: consentEmailEnvLabel.value(),
       ttlHours: Math.round(CONSENT_REQUEST_TTL_MS / 3_600_000),
       kind: consentRequestKind(data.kind),
+      scopeVector: claim.scopeVector,
     });
 
     try {
@@ -444,10 +449,6 @@ function htmlPage(title: string, body: string): string {
 }
 
 const PAGES = {
-  confirmed: htmlPage(
-    "Consent confirmed",
-    "Thank you. The player's account is now active in your family. You can manage or withdraw consent at any time from Family settings in the RoadTrip Royale app."
-  ),
   alreadyConfirmed: htmlPage(
     "Already confirmed",
     "This consent was already confirmed — nothing more to do. You can manage it from Family settings in the app."
@@ -465,6 +466,27 @@ const PAGES = {
     "We could not process this confirmation. Please try the link again in a moment."
   ),
 } as const;
+
+/**
+ * F-21: the POST success page restates what was agreed, per kind (consentNoticeStrings,
+ * notice.confirmed.*). The text is fixed rather than built from the vector because it is
+ * only ever served after a commit whose fresh read passed `validateStoredConsentEvidence`,
+ * and at launch exactly one vector passes it: core granted, the four frozen scopes
+ * unavailable — which is what this text says. When a scope becomes optional, this page
+ * must be built from the committed vector instead.
+ */
+export function consentConfirmedPage(kind: ConsentRequestKind): string {
+  const strings = consentNoticeStrings();
+  // htmlPage interpolates raw; notice strings are escaped here (slice 6 adds es/fr text).
+  return htmlPage(
+    escapeHtml(strings.confirmed.title),
+    escapeHtml(
+      kind === CONSENT_REQUEST_KIND.memberFlag
+        ? strings.confirmed.body.memberFlag
+        : strings.confirmed.body.join
+    )
+  );
+}
 
 /**
  * Reason-specific parent-facing copy for a `commitGuardianConfirmation` refusal
@@ -491,8 +513,16 @@ const PAGES = {
  * Pages are English-only, matching every other page in this file (see the NP-1 email
  * builder in `consentRequestsCore.ts` for the same pre-existing, tracked-elsewhere
  * limitation) — this fix does not add localization infrastructure.
+ *
+ * F-21: `scope_selection_invalid` (the stored scope vector or its evidence fails the
+ * commit's re-check) is permanent for that link too; its copy lives in
+ * consentNoticeStrings under CONSENT_NOTICE_TEXT_VERSION.
  */
 const CONFIRMATION_FAILURE_PAGES: Record<string, string> = {
+  scope_selection_invalid: htmlPage(
+    escapeHtml(consentNoticeStrings().failure.scopeSelectionInvalid.title),
+    escapeHtml(consentNoticeStrings().failure.scopeSelectionInvalid.body)
+  ),
   missing_age_out_marker: htmlPage(
     "This link can't be completed",
     "This player's account was set up before the app started saving a detail this step now needs, so this link can't go through — trying it again won't change that. The fix: have the player delete and reinstall RoadTrip Royale, then re-enter your family's share code. You'll get a new confirmation email, and that link will work."
@@ -1026,7 +1056,7 @@ export const confirmParentalConsent = functions.https.onRequest(async (req, res)
     }
 
     await runPostConfirmationFollowUps(db, request);
-    res.status(200).send(PAGES.confirmed);
+    res.status(200).send(consentConfirmedPage(request.kind));
   } catch (error) {
     functions.logger.error("confirmParentalConsent failed", {
       error: redactEmailAddresses(String(error)),
@@ -1091,6 +1121,10 @@ export async function sendDueConsentPlusNotices(
             ? await resolveGuardianEmailByUid(db, data.guardianUid)
             : null;
       if (!to) throw new Error("no deliverable guardian address");
+      // F-21: the notice restates the vector retained on the request. Without a valid one
+      // there is nothing truthful to restate, so this takes the retry-then-abandon path.
+      const vector = validateStoredScopeVector(data.scopeVector);
+      if (!vector.ok) throw new Error(`no valid scope vector (${vector.reason})`);
 
       const content = buildConsentPlusNoticeEmailContent({
         familyDisplayName:
@@ -1100,6 +1134,8 @@ export async function sendDueConsentPlusNotices(
             ? data.childUserName
             : "your family's player",
         envLabel: input.envLabel,
+        kind: consentRequestKind(data.kind),
+        scopeVector: vector.vector,
       });
       const delivery = await input.sendEmail({
         to,
