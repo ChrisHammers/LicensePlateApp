@@ -67,33 +67,40 @@ function throwRejection(rejection: ChildStatusRejection): never {
 
 /**
  * FR-62: parental rights are keyed to DURABLE GUARDIANSHIP, not live membership.
- * Ladder: (1) a live manager of the family authorizes exactly as before (precedence);
- * (2) otherwise, the actor authorizes as the child's RECORDED guardian for this family
- * — ended or not: the guardian who consented retains §312.6 review/deletion after the
- * child's removal, self-leave, or family inactivation. A newer grant supersedes the
- * record wholesale, so the single doc IS the "most recent guardianship". The deny
- * message matches the membership deny (FR-24: no oracle distinguishing "no such
- * family role" from "not the recorded guardian").
+ * Ladder: (1) a live manager of the family authorizes (precedence) — but only over a
+ * child who is CURRENTLY a member of that same family; a manager role is authority
+ * over one's own roster, never over a uid from elsewhere; (2) otherwise, the actor
+ * authorizes as the child's RECORDED guardian for this family — ended or not: the
+ * guardian who consented retains §312.6 review/deletion after the child's removal,
+ * self-leave, or family inactivation. A live manager whose child is no longer rostered
+ * falls through to (2), so a manager who is ALSO the recorded guardian keeps rights.
+ * A newer grant supersedes the record wholesale, so the single doc IS the "most recent
+ * guardianship". The deny message matches the membership deny (FR-24: no oracle
+ * distinguishing "no such family role", "not the recorded guardian", "a child of
+ * another family" and "no such child").
  */
 export async function authorizeParentalRights(
   db: Firestore,
   input: { actorId: string; familyId: string; childUserId: string }
 ): Promise<{ actorRole: string; viaGuardianship: boolean }> {
-  const actorMemberDoc = await db
-    .collection(`families/${input.familyId}/members`)
-    .doc(input.actorId)
-    .get();
+  const members = db.collection(`families/${input.familyId}/members`);
+  const actorMemberDoc = await members.doc(input.actorId).get();
   if (actorMemberDoc.exists) {
     const role = actorMemberDoc.data()?.role;
     if (typeof role === "string" && CHILD_STATUS_MANAGER_ROLES.includes(role)) {
-      return { actorRole: role, viaGuardianship: false };
+      if ((await members.doc(input.childUserId).get()).exists) {
+        return { actorRole: role, viaGuardianship: false };
+      }
+      // Child not on this roster: fall through to the guardianship arm.
+    } else {
+      // A LIVE member with an insufficient role gets the actionable answer. It is
+      // decided by the actor's own membership alone — the child is never read — so it
+      // says nothing about the target; only the outside-every-arm deny stays uniform.
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Only Captains can manage child status"
+      );
     }
-    // A LIVE member with an insufficient role gets the actionable answer (they can
-    // see the roster anyway); only the outside-both-paths deny below stays uniform.
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Only Captains can manage child status"
-    );
   }
 
   const guardianship = await db

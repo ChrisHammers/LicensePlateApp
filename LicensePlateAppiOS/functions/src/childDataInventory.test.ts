@@ -146,6 +146,41 @@ describe("FR-61 authorization (FR-62 ladder, same as the deletion right)", () =>
     ).rejects.toThrow("Not a family member");
   });
 
+  it("a captain of ANOTHER family passing their own familyId gets the uniform deny, not data", async () => {
+    seedChildWorld();
+    const OTHER_FAMILY = "fam-other";
+    const OTHER_CAPTAIN = "uid_other_captain_000000000";
+    db.seed(`families/${OTHER_FAMILY}/members/${OTHER_CAPTAIN}`, { role: "captain" });
+    await expect(
+      buildChildDataInventoryFlow(asFirestore(db), {
+        actorId: OTHER_CAPTAIN,
+        familyId: OTHER_FAMILY,
+        childUserId: CHILD,
+      })
+    ).rejects.toMatchObject({ code: "permission-denied", message: "Not a family member" });
+  });
+
+  it("after removal a live captain who is not the recorded guardian is denied", async () => {
+    seedChildWorld();
+    const OTHER_CAPTAIN = "uid_family_captain_00000000";
+    db.seed(`families/${FAMILY}/members/${OTHER_CAPTAIN}`, { role: "captain" });
+    db.store.delete(`families/${FAMILY}/members/${CHILD}`);
+    await expect(
+      buildChildDataInventoryFlow(asFirestore(db), {
+        actorId: OTHER_CAPTAIN,
+        familyId: FAMILY,
+        childUserId: CHILD,
+      })
+    ).rejects.toMatchObject({ code: "permission-denied", message: "Not a family member" });
+    // …while the recorded guardian, still a live captain, reaches it via guardianship.
+    const result = await buildChildDataInventoryFlow(asFirestore(db), {
+      actorId: GUARDIAN,
+      familyId: FAMILY,
+      childUserId: CHILD,
+    });
+    expect(result.viaGuardianship).toBe(true);
+  });
+
   it("an adult target is refused, not inventoried", async () => {
     seedChildWorld();
     db.seed(`users/${SCOUT}`, { userName: "Adult", isChildAccount: false });

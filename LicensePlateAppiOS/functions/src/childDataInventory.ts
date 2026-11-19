@@ -126,10 +126,12 @@ function emptySections(): Record<PerUidDataLocationKey, Record<string, unknown>>
 
 /**
  * FR-61: assemble the live inventory for one child uid. Authorization identical to
- * `requestChildDataDeletion` / `getParentalConsentStatus` (FR-62 ladder). For a child
- * whose account was already deleted, the honest §312.6 answer is an inventory of
- * nothing — the recorded guardian still authorizes, `accountExists` is false, and every
- * section reports absent — never an error.
+ * `requestChildDataDeletion` / `getParentalConsentStatus` (FR-62 ladder). A child fully
+ * deleted by account deletion gets the ladder's uniform deny: that deletion removes the
+ * member doc and users/{uid}/private/* (guardianship included) before the user doc, so
+ * neither arm can pass. The `accountExists: false` branch below is reached only when a
+ * member doc or guardianship doc outlives the user doc; it answers with an inventory of
+ * nothing (every section absent), never an error.
  */
 export async function buildChildDataInventoryFlow(
   db: Firestore,

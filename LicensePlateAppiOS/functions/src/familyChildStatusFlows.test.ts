@@ -820,3 +820,292 @@ describe("applyChildProtectionsAfterFlagSet purge failure (FR-4)", () => {
     ).rejects.toThrow(/index purge unavailable/);
   });
 });
+
+// FR-62 scope (2026-11-17): a LIVE manager's rights reach only a child who is CURRENTLY a
+// member of the same family. Before this, the live-manager arm of
+// `authorizeParentalRights` never looked at the child at all, so a captain of an
+// unrelated family could pass THEIR OWN familyId with any child's uid and read that
+// child's consent history, inventory, and run deletion on the account.
+describe("FR-62: parental rights are scoped to the child's own family", () => {
+  /** fam1 holds the flagged child "kid" (guardian "parent"); famY is unrelated. */
+  function seedTwoFamilies(db: FakeFirestore): void {
+    seedFamily(db);
+    db.seed("users/kid", {
+      activeFamilyId: "fam1",
+      isChildAccount: true,
+      userName: "KidUser",
+      userNameLower: "kiduser",
+    });
+    db.seed("families/fam1/members/kid", { role: "scout", isChild: true });
+    db.seed("users/kid/private/guardianship", {
+      guardianUid: "parent",
+      familyId: "fam1",
+      method: "email_plus",
+      grantedAtMillis: 1_000,
+    });
+    db.seed("user_progression/kid", { totalXp: 100 });
+    db.seed("audit_logs/g1", {
+      eventType: "AUDIT_PARENTAL_CONSENT_GRANTED",
+      subjectType: "user",
+      subjectId: "kid",
+      metadata: { familyId: "fam1", method: "email_plus" },
+    });
+
+    db.seed("families/famY", { name: "Elsewhere", creatorId: "yBoss", status: "active" });
+    db.seed("families/famY/members/yBoss", { role: "creator" });
+    db.seed("families/famY/members/yCap", { role: "captain" });
+    db.seed("families/famY/members/yScout", { role: "scout" });
+    db.seed("users/yBoss", { activeFamilyId: "famY" });
+    db.seed("users/yCap", { activeFamilyId: "famY" });
+    db.seed("users/yScout", { activeFamilyId: "famY" });
+  }
+
+  const CHILD_PATHS = [
+    "users/kid",
+    "users/kid/private/guardianship",
+    "users/kid/private/contact",
+    "families/fam1/members/kid",
+    "user_progression/kid",
+  ];
+
+  function snapshotChild(db: FakeFirestore): Record<string, unknown> {
+    return Object.fromEntries(
+      CHILD_PATHS.map((path) => [path, structuredClone(db.store.get(path) ?? null)])
+    );
+  }
+
+  async function rejectionOf(promise: Promise<unknown>): Promise<{ code: string; message: string }> {
+    try {
+      await promise;
+    } catch (error) {
+      const e = error as { code: string; message: string };
+      return { code: e.code, message: e.message };
+    }
+    throw new Error("expected a rejection, but the call succeeded");
+  }
+
+  const UNIFORM_DENY = { code: "permission-denied", message: "Not a family member" };
+
+  it("a captain of another family cannot read the child's consent history", async () => {
+    const db = new FakeFirestore();
+    seedTwoFamilies(db);
+    for (const actorId of ["yCap", "yBoss"]) {
+      expect(
+        await rejectionOf(
+          getParentalConsentStatusFlow(asFirestore(db), {
+            actorId,
+            familyId: "famY",
+            childUserId: "kid",
+          })
+        )
+      ).toEqual(UNIFORM_DENY);
+    }
+  });
+
+  it("a captain of another family cannot delete the child, and nothing about the child changes", async () => {
+    const db = new FakeFirestore();
+    seedTwoFamilies(db);
+    const before = snapshotChild(db);
+    const auditCountBefore = auditRows(db).length;
+    const purges: RecordedPurge[] = [];
+
+    expect(
+      await rejectionOf(
+        requestChildDataDeletionFlow(
+          asFirestore(db),
+          {
+            actorId: "yCap",
+            familyId: "famY",
+            childUserId: "kid",
+            clientMetadata: CLIENT_METADATA,
+          },
+          stubDeps(purges)
+        )
+      )
+    ).toEqual(UNIFORM_DENY);
+
+    expect(snapshotChild(db)).toEqual(before);
+    expect(db.store.get("users/kid")).not.toHaveProperty("pendingDeletionRequestedBy");
+    expect(auditRows(db)).toHaveLength(auditCountBefore);
+    expect(purges).toEqual([]);
+  });
+
+  it("the deny for a child of another family is identical to the deny for no such child", async () => {
+    const db = new FakeFirestore();
+    seedTwoFamilies(db);
+    const otherFamilysChild = await rejectionOf(
+      getParentalConsentStatusFlow(asFirestore(db), {
+        actorId: "yCap",
+        familyId: "famY",
+        childUserId: "kid",
+      })
+    );
+    const noSuchChild = await rejectionOf(
+      getParentalConsentStatusFlow(asFirestore(db), {
+        actorId: "yCap",
+        familyId: "famY",
+        childUserId: "uid-that-does-not-exist",
+      })
+    );
+    expect(otherFamilysChild).toEqual(UNIFORM_DENY);
+    expect(noSuchChild).toEqual(otherFamilysChild);
+
+    const deleteOther = await rejectionOf(
+      requestChildDataDeletionFlow(asFirestore(db), {
+        actorId: "yCap",
+        familyId: "famY",
+        childUserId: "kid",
+        clientMetadata: null,
+      })
+    );
+    const deleteNone = await rejectionOf(
+      requestChildDataDeletionFlow(asFirestore(db), {
+        actorId: "yCap",
+        familyId: "famY",
+        childUserId: "uid-that-does-not-exist",
+        clientMetadata: null,
+      })
+    );
+    expect(deleteOther).toEqual(UNIFORM_DENY);
+    expect(deleteNone).toEqual(deleteOther);
+  });
+
+  it("a live non-manager keeps the actionable role answer, and it says nothing about the child", async () => {
+    const db = new FakeFirestore();
+    seedTwoFamilies(db);
+    const ROLE_ANSWER = {
+      code: "permission-denied",
+      message: "Only Captains can manage child status",
+    };
+    // Own family's child, another family's child, no such child: one answer, decided by
+    // the actor's own membership alone.
+    db.seed("families/fam1/members/scout2", { role: "scout" });
+    const inOwnFamily = await rejectionOf(
+      getParentalConsentStatusFlow(asFirestore(db), {
+        actorId: "scout2",
+        familyId: "fam1",
+        childUserId: "kid",
+      })
+    );
+    const otherFamilysChild = await rejectionOf(
+      getParentalConsentStatusFlow(asFirestore(db), {
+        actorId: "yScout",
+        familyId: "famY",
+        childUserId: "kid",
+      })
+    );
+    const noSuchChild = await rejectionOf(
+      getParentalConsentStatusFlow(asFirestore(db), {
+        actorId: "yScout",
+        familyId: "famY",
+        childUserId: "uid-that-does-not-exist",
+      })
+    );
+    expect(inOwnFamily).toEqual(ROLE_ANSWER);
+    expect(otherFamilysChild).toEqual(ROLE_ANSWER);
+    expect(noSuchChild).toEqual(ROLE_ANSWER);
+  });
+
+  it("a live captain of the child's own family keeps review + deletion while the child is a member", async () => {
+    const db = new FakeFirestore();
+    seedTwoFamilies(db);
+    const status = await getParentalConsentStatusFlow(asFirestore(db), {
+      actorId: "cap", // captain, NOT the recorded guardian
+      familyId: "fam1",
+      childUserId: "kid",
+    });
+    expect(status.records.length).toBeGreaterThan(0);
+
+    const result = await requestChildDataDeletionFlow(
+      asFirestore(db),
+      { actorId: "cap", familyId: "fam1", childUserId: "kid", clientMetadata: null },
+      stubDeps([])
+    );
+    expect(result.success).toBe(true);
+    expect(db.store.has("users/kid")).toBe(false);
+  });
+
+  it("after removal only the recorded guardian keeps rights — even if they are also a live manager", async () => {
+    const db = new FakeFirestore();
+    seedTwoFamilies(db);
+    // Removal: member doc gone, guardianship ENDED (never deleted), flag sticky.
+    db.store.delete("families/fam1/members/kid");
+    db.seed("users/kid", { isChildAccount: true, wasEverInFamily: true, userName: "KidUser" });
+    db.seed("users/kid/private/guardianship", {
+      guardianUid: "parent",
+      familyId: "fam1",
+      method: "email_plus",
+      grantedAtMillis: 1_000,
+      endedAtMillis: 2_000,
+      endedReason: "parent_removed_child",
+    });
+
+    // A live captain of that family who never consented: uniform deny, nothing written.
+    const before = snapshotChild(db);
+    expect(
+      await rejectionOf(
+        getParentalConsentStatusFlow(asFirestore(db), {
+          actorId: "cap",
+          familyId: "fam1",
+          childUserId: "kid",
+        })
+      )
+    ).toEqual(UNIFORM_DENY);
+    expect(
+      await rejectionOf(
+        requestChildDataDeletionFlow(asFirestore(db), {
+          actorId: "cap",
+          familyId: "fam1",
+          childUserId: "kid",
+          clientMetadata: null,
+        })
+      )
+    ).toEqual(UNIFORM_DENY);
+    expect(snapshotChild(db)).toEqual(before);
+    expect(db.store.get("users/kid")).not.toHaveProperty("pendingDeletionRequestedBy");
+
+    // The recorded guardian — still a live creator of fam1 — gets through the guardian arm.
+    const status = await getParentalConsentStatusFlow(asFirestore(db), {
+      actorId: "parent",
+      familyId: "fam1",
+      childUserId: "kid",
+    });
+    expect(status.records.length).toBeGreaterThan(0);
+    const result = await requestChildDataDeletionFlow(
+      asFirestore(db),
+      { actorId: "parent", familyId: "fam1", childUserId: "kid", clientMetadata: null },
+      stubDeps([])
+    );
+    expect(result.success).toBe(true);
+    expect(db.store.has("users/kid")).toBe(false);
+  });
+
+  it("FR-63(b): the marker requester resumes a partly-failed deletion though neither arm would admit them now", async () => {
+    const db = new FakeFirestore();
+    seedTwoFamilies(db);
+    // "cap" (live captain, not the guardian) started a deletion while kid was a member;
+    // it died after the marker + membership exit. The child is no longer a member, so
+    // the live-manager arm no longer reaches it and cap is not the guardian.
+    await expect(
+      requestChildDataDeletionFlow(
+        asFirestore(db),
+        { actorId: "cap", familyId: "fam1", childUserId: "kid", clientMetadata: null },
+        {
+          clearSearchIndexes: async () => {
+            throw new Error("injected: purge outage");
+          },
+        }
+      )
+    ).rejects.toThrow(/purge outage/);
+    expect(db.store.get("users/kid")!.pendingDeletionRequestedBy).toBe("cap");
+    expect(db.store.has("families/fam1/members/kid")).toBe(false);
+
+    const retry = await requestChildDataDeletionFlow(
+      asFirestore(db),
+      { actorId: "cap", familyId: "fam1", childUserId: "kid", clientMetadata: null },
+      stubDeps([])
+    );
+    expect(retry.success).toBe(true);
+    expect(db.store.has("users/kid")).toBe(false);
+  });
+});

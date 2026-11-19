@@ -231,6 +231,20 @@ describe("FR-84 mint authorization", () => {
   });
 
   /**
+   * FR-62 scope: a captain of an unrelated family who passes THEIR OWN familyId with this
+   * child's uid is outside every arm — the uniform deny, not the actionable target message
+   * (which would confirm the uid is a child somewhere).
+   */
+  it("refuses a captain of another family passing their own familyId", async () => {
+    const before = structuredClone(db().store.get("users/kid"));
+    const error = await refusal(mint("otherParent", "kid", "fam2"));
+    expect(error.code).toBe("permission-denied");
+    expect(error.message).toBe("Not a family member");
+    expect(codeDocs()).toHaveLength(0);
+    expect(db().store.get("users/kid")).toEqual(before);
+  });
+
+  /**
    * FR-24 / FR-66 (CB-7): role alone is not proof of adulthood anywhere else in this codebase
    * and is not here either — the "captain" authorizing a child action can be the child's own
    * second account.
