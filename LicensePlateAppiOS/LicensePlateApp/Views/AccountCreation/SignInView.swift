@@ -907,9 +907,13 @@ private struct NewPasswordAutoFillField: UIViewRepresentable {
         private func handleTextChange(on textField: UITextField) {
             guard !isRefreshingSecureDisplay else { return }
             let newValue = textField.text ?? ""
-            if text.wrappedValue != newValue {
+            let previousValue = text.wrappedValue
+            if previousValue != newValue {
                 text.wrappedValue = newValue
             }
+            // Only a bulk write (AutoFill, paste) gets the redraw nudge. Ordinary typing moves the
+            // length by one; flipping secure entry there makes UIKit wipe the field on the next key.
+            guard abs(newValue.count - previousValue.count) > 1 else { return }
             // Defer past AutoFill's own layout pass; secure fields often show one bullet until toggled.
             DispatchQueue.main.async { [weak self, weak textField] in
                 guard let self, let textField else { return }
@@ -929,16 +933,43 @@ private struct NewPasswordAutoFillField: UIViewRepresentable {
             
             isRefreshingSecureDisplay = true
             defer { isRefreshingSecureDisplay = false }
+            let caret = textNeedsUpdate ? nil : caretOffset(in: textField)
             
             // Toggle secure entry around text assignment so glyph count matches string length.
             textField.isSecureTextEntry = false
             textField.text = value
             textField.isSecureTextEntry = shouldSecure
             if shouldSecure {
-                // Re-assert text after enabling secure entry (UIKit sometimes truncates glyphs otherwise).
-                textField.text = value
+                // Put the text back through the input path. A plain assignment here leaves UIKit
+                // set to replace everything on the next key (see reassertText).
+                reassertText(value, afterSecuring: textField)
             }
+            restoreCaret(caret, in: textField)
             textField.textColor = .label
+        }
+        
+        /// A flip rewrites the text, which leaves the caret at the end; these two put it back where it was.
+        private func caretOffset(in textField: UITextField) -> Int? {
+            guard textField.isFirstResponder, let range = textField.selectedTextRange else { return nil }
+            return textField.offset(from: textField.beginningOfDocument, to: range.end)
+        }
+        
+        private func restoreCaret(_ offset: Int?, in textField: UITextField) {
+            guard let offset, textField.isFirstResponder,
+                  let position = textField.position(from: textField.beginningOfDocument, offset: offset) else { return }
+            textField.selectedTextRange = textField.textRange(from: position, to: position)
+        }
+        
+        /// UIKit treats a focused field whose secure entry was just switched on as freshly entered:
+        /// the next key replaces everything in it. Putting the text back through the input path
+        /// spends that, so typing carries on where it left off.
+        private func reassertText(_ value: String, afterSecuring textField: UITextField) {
+            guard textField.isFirstResponder, !value.isEmpty else {
+                textField.text = value
+                return
+            }
+            textField.text = ""
+            textField.insertText(value)
         }
         
         /// AutoFill can leave the model correct but only one secure glyph drawn — force a redraw.
@@ -950,11 +981,13 @@ private struct NewPasswordAutoFillField: UIViewRepresentable {
             
             isRefreshingSecureDisplay = true
             defer { isRefreshingSecureDisplay = false }
+            let caret = caretOffset(in: textField)
             
             textField.isSecureTextEntry = false
             textField.text = value
             textField.isSecureTextEntry = true
-            textField.text = value
+            reassertText(value, afterSecuring: textField)
+            restoreCaret(caret, in: textField)
             textField.textColor = .label
         }
     }
